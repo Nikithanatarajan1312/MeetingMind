@@ -6,7 +6,7 @@ MeetingMind converts meeting transcripts into actionable outputs:
 - follow-up suggestions
 - searchable meeting history
 - Q&A over stored transcripts
-- optional Google Calendar integration
+- Google Calendar integration
 
 The app is split into:
 - `backend/` — FastAPI + NLP/LLM orchestration + Postgres persistence
@@ -21,20 +21,20 @@ The app is split into:
 - Re-open any past meeting from history
 - Ask questions against transcript context (`/ask`)
 - Mark action items complete/incomplete
-- Optionally create and link Google Calendar events
+- Create and link Google Calendar events
 
 ### Output flow (high-level)
 1. User submits transcript (paste or upload).
-2. Backend preprocesses text and chooses analyze backend:
-   - Groq if configured and enabled
-   - else Gemini if configured and enabled
-   - else local fallback (if allowed)
-3. Backend returns summary/action items/follow-ups and stores records.
-4. Frontend renders results board, history, task controls, and Q&A panel.
+2. Backend preprocesses text and routes analysis:
+   - **Groq** when a Groq API key is set and Groq analyze is enabled (default).
+   - Else **Gemini** when a Gemini API key is set and Gemini analyze is enabled.
+   - Else **local analyze**: **facebook/bart-large-cnn** (summarization), **spaCy** `en_core_web_sm` (action-item heuristics), and rule-based follow-ups whenever neither Groq nor Gemini is used for `/analyze`.
+3. **Q&A** (`/ask`): Groq or Gemini when configured; otherwise **DistilBERT** (extractive question answering over the transcript).
+4. Backend returns summary, action items, and follow-ups, persists to Postgres, and the frontend renders results, history, tasks, and Q&A.
 
 ## Tech stack
 
-- **Backend:** FastAPI, psycopg2, spaCy, transformers, Groq SDK, Google GenAI SDK
+- **Backend:** FastAPI, psycopg2, spaCy, Hugging Face Transformers (**BART-large-CNN** for summarization, **DistilBERT** for extractive Q&A), Groq SDK, Google GenAI SDK
 - **Frontend:** React, Vite, Axios, Framer Motion, Tailwind (via Vite plugin)
 - **Database:** PostgreSQL
 
@@ -65,10 +65,10 @@ DATABASE_URL=postgresql://postgres:postgres@localhost:5432/meetingmind
 # Recommended (for best analyze quality)
 GROQ_API_KEY=your_key_here
 
-# Optional fallback
+# Gemini (if Groq is not used)
 # GEMINI_API_KEY=your_key_here
 
-# Optional behavior flags
+# Behavior flags
 # GROQ_ANALYZE=1
 # GEMINI_ANALYZE=1
 # ALLOW_LOCAL_ANALYZE_WITHOUT_LLM=0
@@ -115,29 +115,15 @@ In dev, frontend proxy maps `/api/*` to backend `http://127.0.0.1:8000/*`.
 - `PATCH /action-items/{action_id}` — mark completed/uncompleted
 - `DELETE /meeting/{meeting_id}` — delete meeting and related data
 
-## Google Calendar (optional)
+## Google Calendar
 
-If you want calendar linking:
+Configure calendar linking:
 - set `GOOGLE_CALENDAR_CLIENT_ID`
 - set `GOOGLE_CALENDAR_CLIENT_SECRET`
 - set `GOOGLE_CALENDAR_REDIRECT_URI`
 - ensure redirect URI exactly matches Google Cloud Console OAuth settings
 
-Once connected in UI, you can create a calendar event from meeting context.
-
-## Common troubleshooting
-
-- **`spaCy model missing`**
-  - Run: `python -m spacy download en_core_web_sm`
-- **Frontend cannot reach API**
-  - Ensure backend is running on port `8000`
-  - Ensure frontend is running with `npm run dev`
-- **Analyze quality poor / disabled**
-  - Verify `GROQ_API_KEY` (or `GEMINI_API_KEY`) in `backend/.env`
-  - Check `GET /health` output
-- **Google OAuth redirect_uri_mismatch**
-  - Copy `GOOGLE_CALENDAR_REDIRECT_URI` exactly into Google OAuth client config
-  - `localhost` and `127.0.0.1` are treated as different URIs
+Once connected in the UI, you can create a calendar event from meeting context.
 
 ## Project structure
 
