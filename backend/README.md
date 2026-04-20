@@ -1,34 +1,44 @@
-# MeetingMind — backend API
+# MeetingMind Backend
 
-FastAPI service: transcript upload/paste → summary, action items, follow-ups, Q&A.
+FastAPI service for transcript analysis, persistence, Q&A, and Google Calendar integration.
 
-## Hybrid NLP (report) / Gemini analyze (runtime)
+Full project docs (frontend, end-to-end flow): [`../README.md`](../README.md)
 
-With **`GROQ_API_KEY`** and **`GROQ_ANALYZE=1`** (default), **`/analyze` uses Groq** (chat completions, non-streaming): summary, action items, deadlines, follow-ups. If Groq is unset, **`GEMINI_API_KEY`** is used the same way.
-
-**BART**, **spaCy**, and **DistilBERT** stay loaded for **extractive Q&A**, heuristics, and **ablation** (`GROQ_ANALYZE=0` / `GEMINI_ANALYZE=0` or `ALLOW_LOCAL_ANALYZE_WITHOUT_LLM=1`).
-
-Longer **report-ready wording**: see [`HYBRID_NLP_REPORT.md`](./HYBRID_NLP_REPORT.md).
-
-## Setup
+## Run backend only
 
 ```bash
 cd backend
-python -m venv .venv && source .venv/bin/activate   # Windows: .venv\Scripts\activate
+python -m venv .venv
+source .venv/bin/activate   # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 python -m spacy download en_core_web_sm
-# Create backend/.env with API keys as needed (see README env vars; .env is gitignored)
 uvicorn main:app --reload --port 8000
 ```
 
-## Health check
+API docs: `http://127.0.0.1:8000/docs`
 
-`GET /health` — includes `gemini_analyze_enabled`, `gemini_configured`, and `local_nlp` description.
+## Tech stack (this service)
 
-## Google Calendar (optional)
+- **FastAPI**, **psycopg2** (PostgreSQL)
+- **Hugging Face Transformers:** **facebook/bart-large-cnn** (summarization pipeline), **distilbert-base-cased-distilled-squad** (extractive Q&A)
+- **spaCy** `en_core_web_sm` (action-item heuristics and NLP helpers)
+- **Groq** and **Google GenAI** SDKs when API keys are configured
 
-In [Google Cloud Console](https://console.cloud.google.com/), enable **Google Calendar API**, create OAuth **Web client** credentials, and set **Authorized redirect URI** to match `GOOGLE_CALENDAR_REDIRECT_URI` in `.env` (e.g. `http://127.0.0.1:8000/calendar/oauth/callback`). Put **`GOOGLE_CALENDAR_CLIENT_ID`** and **`GOOGLE_CALENDAR_CLIENT_SECRET`** from the console into `backend/.env`. After connecting in the UI, the sidebar shows the **current** calendar event (refreshed every minute) and can **create** an event linked to the open meeting.
+## Analyze path (`/analyze`)
 
-If Google shows **Error 400: redirect_uri_mismatch**, the value in **`GOOGLE_CALENDAR_REDIRECT_URI`** must appear **character-for-character** under **Authorized redirect URIs** for that OAuth client (including `localhost` vs `127.0.0.1` — they are different to Google). You can add both URLs in the console, or use one everywhere. Call **`GET /calendar/status`** and copy **`oauth_redirect_uri`** into the console.
+- **Groq** when `GROQ_API_KEY` is set and `GROQ_ANALYZE=1` (default).
+- Else **Gemini** when `GEMINI_API_KEY` is set and `GEMINI_ANALYZE=1`.
+- Else **local analyze**: **BART-large-CNN** for summaries, **spaCy** for action-item extraction heuristics, and rule-based follow-ups—whenever neither Groq nor Gemini is used for meeting analysis (e.g. no LLM keys or analyze disabled).
 
-If the browser shows **`invalid_grant` / Missing code verifier**, the backend disables PKCE for the web client flow (see `google_calendar.make_flow`) so the callback can exchange the code using the client secret alone.
+`GET /health` describes the active path and loaded models.
+
+## Q&A path (`/ask`)
+
+- **Groq** or **Gemini** when the corresponding API key is configured.
+- Else **DistilBERT** extractive QA over the transcript (same model as loaded at startup).
+
+## Google Calendar
+
+In Google Cloud Console: enable **Google Calendar API**, create OAuth **Web client** credentials, and add an authorized redirect URI that matches **`GOOGLE_CALENDAR_REDIRECT_URI`** in `backend/.env` exactly (including `localhost` vs `127.0.0.1`).
+
+Set `GOOGLE_CALENDAR_CLIENT_ID`, `GOOGLE_CALENDAR_CLIENT_SECRET`, and `GOOGLE_CALENDAR_REDIRECT_URI`. After connecting in the UI, you can create events linked to meetings.

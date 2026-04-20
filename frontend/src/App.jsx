@@ -202,21 +202,25 @@ export default function App() {
     if (!result?.meeting_id) return
     setMessages((m) => [...m, { role: 'user', text: question }])
     setQaLoading(true)
+    const started = performance.now()
     try {
       const data = await askQuestion({ meetingId: result.meeting_id, question })
+      const latencyMs = Math.round(performance.now() - started)
       setMessages((m) => [
         ...m,
         {
           role: 'assistant',
           text: data.answer,
           confidence: data.confidence,
+          latencyMs,
         },
       ])
     } catch (e) {
+      const latencyMs = Math.round(performance.now() - started)
       const msg = e.response?.data?.detail || e.message || 'Ask failed'
       setMessages((m) => [
         ...m,
-        { role: 'assistant', text: String(msg), confidence: 0 },
+        { role: 'assistant', text: String(msg), confidence: 0, latencyMs },
       ])
     } finally {
       setQaLoading(false)
@@ -225,7 +229,7 @@ export default function App() {
 
   return (
     <BubbleBackground interactive className="min-h-screen">
-      <div className="relative z-10 mx-auto max-w-6xl px-4 pb-20 pt-10 md:px-8 md:pt-14">
+      <div className="relative z-10 mx-auto max-w-[1440px] px-4 pb-20 pt-10 md:px-8 md:pt-14">
         <header className="max-w-2xl">
           <motion.div initial={{ opacity: 0, y: -12 }} animate={{ opacity: 1, y: 0 }}>
             <p className="text-sm font-medium uppercase tracking-[0.2em] text-cyan-400/90">
@@ -246,22 +250,9 @@ export default function App() {
           </motion.div>
         </header>
 
-        <div className="mt-14 grid gap-10 lg:grid-cols-[1fr_380px]">
-          <UploadPanel
-            title={title}
-            setTitle={setTitle}
-            transcript={transcript}
-            setTranscript={setTranscript}
-            file={file}
-            setFile={setFile}
-            mode={mode}
-            setMode={setMode}
-            loading={loading}
-            onSubmitPaste={onSubmitPaste}
-            onSubmitFile={onSubmitFile}
-          />
-
-          <div className="space-y-6">
+        {/* lg+: wider center (transcript), narrower calendar; left stays balanced. Mobile: upload first. */}
+        <div className="mt-14 grid grid-cols-1 gap-6 lg:grid-cols-[1fr_1.42fr_0.82fr] lg:items-stretch lg:gap-5">
+          <aside className="order-2 flex min-h-0 min-w-0 flex-col gap-4 lg:order-1">
             <MeetingHistory
               meetings={meetings}
               selectedId={result?.meeting_id}
@@ -270,7 +261,43 @@ export default function App() {
               loading={meetingsLoading}
               onRefresh={refreshMeetings}
             />
+            <div className="flex min-h-0 flex-1 flex-col">
+              {result ? (
+                <QAPanel
+                  meetingId={result.meeting_id}
+                  onAsk={onAsk}
+                  loading={qaLoading}
+                  messages={messages}
+                  className="flex min-h-0 flex-1 flex-col"
+                />
+              ) : (
+                <div className="flex flex-1 items-center justify-center rounded-2xl border border-dashed border-white/15 bg-black/30 p-4 text-center text-xs leading-relaxed text-slate-400 backdrop-blur-sm">
+                  Run an analysis to unlock Q&amp;A over the stored transcript.
+                </div>
+              )}
+            </div>
+          </aside>
+
+          <div className="order-1 flex min-h-0 min-w-0 flex-col lg:order-2">
+            <UploadPanel
+              fillColumn
+              title={title}
+              setTitle={setTitle}
+              transcript={transcript}
+              setTranscript={setTranscript}
+              file={file}
+              setFile={setFile}
+              mode={mode}
+              setMode={setMode}
+              loading={loading}
+              onSubmitPaste={onSubmitPaste}
+              onSubmitFile={onSubmitFile}
+            />
+          </div>
+
+          <aside className="order-3 flex min-h-0 min-w-0 flex-col lg:order-3">
             <CalendarPanel
+              className="flex min-h-0 flex-1 flex-col"
               authVersion={calendarAuthVersion}
               meetingId={result?.meeting_id}
               meetingTitle={result?.title}
@@ -279,20 +306,7 @@ export default function App() {
               onCalendarLinked={onCalendarLinked}
               actionItems={result?.action_items}
             />
-            {result && (
-              <QAPanel
-                meetingId={result.meeting_id}
-                onAsk={onAsk}
-                loading={qaLoading}
-                messages={messages}
-              />
-            )}
-            {!result && (
-              <div className="rounded-2xl border border-dashed border-white/15 bg-white/[0.02] p-8 text-center text-sm text-slate-500">
-                Run an analysis to unlock Q&amp;A over the stored transcript.
-              </div>
-            )}
-          </div>
+          </aside>
         </div>
 
         {result && (
