@@ -9,7 +9,7 @@ MeetingMind converts meeting transcripts into actionable outputs:
 - Google Calendar integration
 
 The app is split into:
-- `backend/` — FastAPI + NLP/LLM orchestration + Postgres persistence
+- `backend/` — FastAPI, PostgreSQL (psycopg2), Hugging Face **Transformers** (BART-large-CNN summarization, DistilBERT extractive Q&A), **spaCy**, Groq / Google GenAI when configured, plus Google Calendar OAuth helpers
 - `frontend/` — React + Vite dashboard UI
 
 ## What the app does
@@ -103,6 +103,7 @@ In dev, frontend proxy maps `/api/*` to backend `http://127.0.0.1:8000/*`.
 6. Toggle task completion status.
 7. Ask follow-up questions in Q&A panel.
 8. Reopen older meetings from history.
+9. Use the **Calendar** panel: connect your Google account once, then create an event for the open meeting—the form is **prefilled** from the meeting title, summary, and action-item deadlines (you can edit start time, description, timezone, or add a Meet link before saving).
 
 ## Backend endpoints (main)
 
